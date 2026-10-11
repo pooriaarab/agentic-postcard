@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "description": "Send postcards via Lob or PostGrid from CLI, code, or MCP.",
+  "name": "io.github.pooriaarab/agentic-postcard",
+  "packages": [
+    {
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp",
+          "valueHint": "subcommand"
+        }
+      ],
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "registryType": "npm",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "version": "0.1.0",
+      "identifier": "agentic-postcard"
+    }
+  ],
+  "repository": {
+    "id": "1413727195",
+    "source": "github",
+    "url": "https://github.com/pooriaarab/agentic-postcard"
+  },
+  "version": "0.1.0"
+}

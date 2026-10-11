@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "agentic-postcard": {
+      "args": [
+        "-y",
+        "agentic-postcard",
+        "mcp"
+      ],
+      "command": "npx"
+    }
+  }
+}

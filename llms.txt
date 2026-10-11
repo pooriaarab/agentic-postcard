@@ -1,0 +1,15 @@
+# agentic-postcard
+
+Send postcards through print vendors from CLI, code, or MCP.
+
+Keywords: postcards, direct-mail, lob, postgrid, agentic-suite, claude-code, codex, cli, mcp.
+
+- SDK: import { sendPostcard, trackPostcard } from "agentic-postcard".
+- CLI: agentic-postcard send --to ... --message "...".
+- MCP: run agentic-postcard mcp, then call send_postcard.
+
+## Docs
+
+- README: https://github.com/pooriaarab/agentic-postcard
+- Core contract: https://github.com/pooriaarab/agentic-postcard/blob/main/docs/agentic-core.md
+- License: MIT
