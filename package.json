@@ -9,7 +9,7 @@
     "agentic-core": "^0.1.0",
     "zod": "^3.25.0"
   },
-  "description": "Send postcards through print vendors from CLI, code, or MCP.",
+  "description": "Send, track, and cancel direct-mail postcards through Lob and PostGrid with a TypeScript SDK, CLI, MCP server, and local dry runs.",
   "devDependencies": {
     "@types/node": "^22.0.0",
     "tsup": "^8.0.0",
@@ -33,11 +33,14 @@
     "direct-mail",
     "lob",
     "postgrid",
-    "agentic-suite",
-    "claude-code",
-    "codex",
+    "print-mail",
+    "typescript",
+    "nodejs",
     "cli",
-    "mcp"
+    "mcp",
+    "dry-run",
+    "mail-tracking",
+    "html-postcards"
   ],
   "license": "MIT",
   "main": "./dist/index.js",
