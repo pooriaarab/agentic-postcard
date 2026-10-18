@@ -7,6 +7,7 @@ import {
   selectAdapter,
   sendPostcard,
   trackPostcard,
+  verifyRecipient,
   type PostcardSend,
 } from "./postcard.js";
 import { DryRunPostcardAdapter } from "./vendors/stub.js";
@@ -136,6 +137,104 @@ describe("sendPostcard", () => {
         id: "psc_live_1",
         trackingUrl: "https://proof.test/1.pdf",
       });
+      expect(getCostReport()).toMatchObject({ dispatches: 1, units: 1 });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+});
+
+describe("verifyRecipient", () => {
+  test("dry check maps the address without network", async () => {
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new Error("network must stay idle in a dry check");
+    }) as unknown as typeof fetch;
+    try {
+      const check = await verifyRecipient(SEND.to);
+      expect(check).toEqual({ deliverability: "deliverable", score: 90 });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  test("dry run carries the recipient band", async () => {
+    resetCosts();
+    const result = await sendPostcard(SEND, { keys: {} });
+    expect(result.dryRun).toBe(true);
+    expect(result.recipient).toEqual({
+      deliverability: "deliverable",
+      score: 90,
+    });
+    expect(getCostReport().dispatches).toBe(0);
+  });
+
+  test("live send with a deliverable lob check mails the card", async () => {
+    resetCosts();
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string) => {
+      if (String(url).includes("us_verifications")) {
+        return new Response(
+          JSON.stringify({
+            id: "lverify_1",
+            deliverability: "deliverable",
+            components: {
+              primary_number: "90",
+              street_name: "Canal",
+              street_suffix: "St",
+              city: "Boston",
+              state: "MA",
+              zip_code: "02114",
+            },
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response(
+        JSON.stringify({ id: "psc_live_2", url: "https://proof.test/2.pdf" }),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
+    try {
+      const result = await sendPostcard(SEND, {
+        live: true,
+        vendor: "lob",
+        verifyVendor: "lob",
+        keys: { lobKey: "k" },
+      });
+      expect(result.dryRun).toBe(false);
+      expect(result.recipient.deliverability).toBe("deliverable");
+      expect(result.receipt.id).toBe("psc_live_2");
+      expect(getCostReport()).toMatchObject({ dispatches: 2, units: 2 });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  test("live send to an undeliverable address is refused", async () => {
+    resetCosts();
+    const realFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = (async (url: string) => {
+      calls += 1;
+      if (String(url).includes("us_verifications")) {
+        return new Response(
+          JSON.stringify({ id: "lverify_2", deliverability: "undeliverable" }),
+          { status: 200 },
+        );
+      }
+      throw new Error("refused card must not reach the vendor");
+    }) as unknown as typeof fetch;
+    try {
+      await expect(
+        sendPostcard(SEND, {
+          live: true,
+          vendor: "lob",
+          verifyVendor: "lob",
+          keys: { lobKey: "k" },
+        }),
+      ).rejects.toThrow(/undeliverable/);
+      expect(calls).toBe(1);
       expect(getCostReport()).toMatchObject({ dispatches: 1, units: 1 });
     } finally {
       globalThis.fetch = realFetch;

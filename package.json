@@ -6,6 +6,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "agentic-address": "^0.1.0",
     "agentic-core": "^0.1.0",
     "zod": "^3.25.0"
   },

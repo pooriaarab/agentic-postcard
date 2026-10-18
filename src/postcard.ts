@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { verifyAddress, type AddressVendor } from "agentic-address";
 import {
   createGuards,
   recordCost,
@@ -220,8 +221,44 @@ export function buildCardHtml(message: string): CardHtml {
   return { front, back };
 }
 
-// Send flow. Validates, checks guards, sends, then records cost.
-// Dry run walks the same path but moves no card and records nothing.
+// Recipient check. Every send verifies the recipient through
+// agentic-address first. Dry and local checks run offline and
+// free. Keyed vendors call out only on a live send, and a live
+// send to an undeliverable address is refused before it mails.
+
+export type VerifyVendor = AddressVendor;
+
+export interface RecipientCheck {
+  deliverability: "deliverable" | "risky" | "undeliverable" | "unknown";
+  score: number;
+}
+
+export async function verifyRecipient(
+  to: PostcardAddress,
+  vendor: VerifyVendor = "dry",
+  live = false,
+  apiKey?: string,
+): Promise<RecipientCheck> {
+  const receipt = await verifyAddress({
+    street: to.line1,
+    line2: to.line2,
+    city: to.city,
+    state: to.state,
+    postal: to.zip,
+    country: to.country,
+    vendor,
+    live,
+    ...(apiKey ? { apiKey } : {}),
+  });
+  return {
+    deliverability: receipt.deliverability,
+    score: receipt.score,
+  };
+}
+
+// Send flow. Validates, checks guards, verifies the recipient,
+// sends, then records cost. Dry run walks the same path but
+// moves no card and records nothing.
 
 export interface SendPostcardOptions {
   vendor?: string;
@@ -229,11 +266,13 @@ export interface SendPostcardOptions {
   guards?: Guards;
   logger?: Logger;
   keys?: AdapterKeys;
+  verifyVendor?: VerifyVendor;
 }
 
 export interface SendPostcardResult {
   dryRun: boolean;
   receipt: PostcardReceipt;
+  recipient: RecipientCheck;
 }
 
 export async function sendPostcard(
@@ -245,6 +284,14 @@ export async function sendPostcard(
   const adapter = selectAdapter(options.vendor, options.keys);
   const guards = options.guards ?? createGuards();
   guards.checkDispatch(`${request.front}\n${request.back}`);
+  const verifyVendor = options.verifyVendor ?? "dry";
+  const keys = readKeys(options.keys);
+  const recipientCheck = await verifyRecipient(
+    request.to,
+    verifyVendor,
+    live && verifyVendor !== "dry" && verifyVendor !== "local",
+    keys.lobKey ?? keys.postgridKey,
+  );
   if (!live) {
     const id = `dry_${randomUUID()}`;
     options.logger?.info(`dry run: would send via ${adapter.name}`);
@@ -256,6 +303,7 @@ export async function sendPostcard(
         trackingUrl: `dry-run://agentic-postcard/${id}`,
         at: new Date().toISOString(),
       },
+      recipient: recipientCheck,
     };
   }
   if (adapter.name === "dry-run") {
@@ -263,11 +311,16 @@ export async function sendPostcard(
       "live send needs a vendor key: set LOB_API_KEY or POSTGRID_API_KEY",
     );
   }
+  if (recipientCheck.deliverability === "undeliverable") {
+    throw new VendorError(
+      `recipient address is undeliverable (score ${recipientCheck.score})`,
+    );
+  }
   const receipt = await adapter.sendCard(request);
   guards.recordDispatch();
   recordCost({ kind: "dispatch", adapter: adapter.name, units: 1 });
   options.logger?.info(`sent postcard ${receipt.id} via ${adapter.name}`);
-  return { dryRun: false, receipt };
+  return { dryRun: false, receipt, recipient: recipientCheck };
 }
 
 export async function trackPostcard(
