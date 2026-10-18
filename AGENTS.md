@@ -37,7 +37,9 @@ Keywords: postcards, direct-mail, lob, postgrid, agentic-suite, claude-code, cod
 ## Rules
 
 - Preview with dry run before each live mail.
+- Every send verifies the recipient through agentic-address first.
 - Never mail live unless the user asks for a live send.
+- Never mail live to an undeliverable recipient.
 - Stop when a guard denies the call. State the reason.
 - Never retry a denied call with changed text to dodge a guard.
 - Report adapter errors as errors. Never present them as success.

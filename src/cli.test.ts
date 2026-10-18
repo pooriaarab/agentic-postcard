@@ -53,6 +53,19 @@ describe("parseArgs", () => {
     });
   });
 
+  test("send takes a verify vendor", () => {
+    const request = parseArgs([
+      "send",
+      "--to",
+      TO,
+      "--message",
+      "hello",
+      "--verify-vendor",
+      "lob",
+    ]);
+    expect(request).toMatchObject({ command: "send", verifyVendor: "lob" });
+  });
+
   test("send needs a recipient", () => {
     expect(() => parseArgs(["send", "--message", "hi"])).toThrow(/--to/);
   });

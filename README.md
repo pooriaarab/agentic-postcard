@@ -116,7 +116,12 @@ Live sends need `live: true` or `--live` and vendor credentials.
 An explicit vendor selection requires its key even for previews; `dry-run` needs none.
 Without explicit selection, PostGrid takes priority over Lob when both keys exist.
 
-Address checks validate required strings, not postal deliverability. Artwork is not checked against print-safe layout rules.
+Every send verifies the recipient through agentic-address and returns
+its deliverability band and score as `recipient`. The default `dry`
+check runs offline and free. Pass `--verify-vendor lob` (or another
+keyed vendor) to check against the vendor on a live send; a live send
+to an undeliverable address is refused before it mails. Artwork is not
+checked against print-safe layout rules.
 The Lob adapter fixes `use_type` to `operational`; assess suitability before using it for a campaign.
 Requests default to ten-second timeouts. Adapters do not implement automatic retries or idempotency keys.
 Check vendor state before retrying an uncertain send.

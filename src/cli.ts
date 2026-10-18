@@ -8,6 +8,7 @@ import {
   trackPostcard,
   type PostcardAddress,
   type PostcardSize,
+  type VerifyVendor,
 } from "./postcard.js";
 import { getCostReport, GuardError, VendorError } from "./core.js";
 import { DEFAULT_BRAND } from "./index.js";
@@ -38,6 +39,7 @@ export interface CliRequest {
   message?: string;
   size?: string;
   vendor?: string;
+  verifyVendor?: string;
   description?: string;
   sendDate?: string;
   id?: string;
@@ -107,6 +109,9 @@ export function parseArgs(argv: string[]): CliRequest {
         break;
       case "--vendor":
         request.vendor = takeValue(flag);
+        break;
+      case "--verify-vendor":
+        request.verifyVendor = takeValue(flag);
         break;
       case "--description":
         request.description = takeValue(flag);
@@ -185,7 +190,9 @@ function helpText(): string {
     "  send --to <json|@file> [--message <t>] [--front <h|@f> --back <h|@f>]",
     "       [--from <json|@file>] [--size 4x6|6x9] [--vendor lob|postgrid]",
     "       [--description <t>] [--send-date <iso>] [--live|--dry-run]",
+    "       [--verify-vendor dry|local|lob|postgrid|smartystreets|osm]",
     "       Preview a card send, or mail it with --live. Prints the receipt.",
+    "       Every send verifies the recipient through agentic-address first.",
     "  track --vendor <lob|postgrid> --id <card>  Print live delivery status.",
     "  cancel --vendor <lob|postgrid> --id <card> [--note <t>]  Cancel a card.",
     "  costs                                      Print the cost report as JSON.",
@@ -260,7 +267,11 @@ export async function runCli(argv: string[], io: CliIo = defaultIo()): Promise<n
             description: request.description,
             sendDate: request.sendDate,
           },
-          { vendor: request.vendor, live: request.live },
+          {
+            vendor: request.vendor,
+            live: request.live,
+            verifyVendor: request.verifyVendor as VerifyVendor | undefined,
+          },
         );
         io.out(JSON.stringify(result));
         return 0;
