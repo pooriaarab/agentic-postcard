@@ -38,5 +38,6 @@ to stop a card, `get_cost_report` for send totals.
 
 - Preview each send with dry run first.
 - Mail live only when the user asks for it.
+- Every send verifies the recipient; live mail to an undeliverable address is refused.
 - Report guard denials and adapter errors as failures.
 - Read the cost report at the end.

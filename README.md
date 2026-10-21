@@ -109,6 +109,28 @@ Its four tools are `send_postcard`, `track_postcard`, `cancel_postcard`, and `ge
 `send_postcard` needs `dryRun: false` for live mail.
 The source Worker exposes `GET /health` and `POST /summarize`; it does not send postcards.
 
+### Edge runtimes (Cloudflare Workers)
+
+`agentic-postcard/adapters` is a fetch-only entry point for hosts with no filesystem and no `process.env`. Every credential arrives as an argument; nothing is read from the environment. `sendVerifiedPostcard` is the only call on this path that verifies the recipient — it runs an injected verifier (an agentic-address verify call in the CRM) before the vendor sees the card and refuses any verdict not on the allow list, which defaults to `["deliverable"]` (pass `allowedDeliverability` to widen it). `sendCard` on `LobPostcardAdapter` and `PostGridPostcardAdapter` verifies nothing on its own.
+
+```js
+import { PostGridPostcardAdapter, sendVerifiedPostcard, addressInputOf } from 'agentic-postcard/adapters';
+import { verifyAddress } from 'agentic-address/adapters';
+
+const sent = await sendVerifiedPostcard(
+  { to, front, back },
+  {
+    adapter: new PostGridPostcardAdapter({ apiKey: env.POSTGRID_API_KEY, baseUrl: env.POSTGRID_API_BASE }),
+    verify: (to) => verifyAddress({ ...addressInputOf(to), vendor: 'postgrid', live: true, apiKey: env.POSTGRID_API_KEY, baseUrl: env.ADDRESS_API_BASE }),
+  },
+);
+// sent.receipt carries vendorId, costCents (PostGrid `price`; Lob `cost`),
+// currency, and expectedDelivery (PostGrid `expectedDeliveryDate`; Lob
+// `expected_delivery_date`) when the vendor reports them.
+```
+
+The `/adapters` entry imports nothing from `agentic-core` or `agentic-address`, so the bundle needs no `nodejs_compat` flag at all; failures throw the local `AdapterError` (`code: "VENDOR_FAILED"`). See `e2e/worker.ts` and `e2e/e2e.ts` for a bundled proof and a dry-run E2E against local fakes.
+
 ## Delivery and behavior limits
 
 Preview before each live send. Mail only with explicit user authorization.
@@ -116,7 +138,12 @@ Live sends need `live: true` or `--live` and vendor credentials.
 An explicit vendor selection requires its key even for previews; `dry-run` needs none.
 Without explicit selection, PostGrid takes priority over Lob when both keys exist.
 
-Address checks validate required strings, not postal deliverability. Artwork is not checked against print-safe layout rules.
+Every send verifies the recipient through agentic-address and returns
+its deliverability band and score as `recipient`. The default `dry`
+check runs offline and free. Pass `--verify-vendor lob` (or another
+keyed vendor) to check against the vendor on a live send; a live send
+to an undeliverable address is refused before it mails. Artwork is not
+checked against print-safe layout rules.
 The Lob adapter fixes `use_type` to `operational`; assess suitability before using it for a campaign.
 Requests default to ten-second timeouts. Adapters do not implement automatic retries or idempotency keys.
 Check vendor state before retrying an uncertain send.

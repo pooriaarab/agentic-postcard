@@ -16,6 +16,7 @@ import {
   trackPostcard,
   type AdapterKeys,
   type PostcardSend,
+  type VerifyVendor,
 } from "./postcard.js";
 import { DEFAULT_BRAND } from "./index.js";
 
@@ -76,6 +77,10 @@ export function createMcpServer(deps: McpDeps = {}): McpServer {
         vendor: z.string().optional().describe("lob, postgrid, or dry-run."),
         description: z.string().optional().describe("Label for the dashboard."),
         dryRun: z.boolean().optional().describe("Preview only. Default true."),
+        verifyVendor: z
+          .string()
+          .optional()
+          .describe("agentic-address vendor for the recipient check."),
       },
       annotations: {
         readOnlyHint: false,
@@ -84,7 +89,18 @@ export function createMcpServer(deps: McpDeps = {}): McpServer {
         openWorldHint: true,
       },
     },
-    async ({ to, from, front, back, message, size, vendor, description, dryRun }) => {
+    async ({
+      to,
+      from,
+      front,
+      back,
+      message,
+      size,
+      vendor,
+      description,
+      dryRun,
+      verifyVendor,
+    }) => {
       try {
         let art: { front: string; back: string };
         if (message !== undefined) {
@@ -111,6 +127,7 @@ export function createMcpServer(deps: McpDeps = {}): McpServer {
             guards,
             logger,
             keys,
+            verifyVendor: verifyVendor as VerifyVendor | undefined,
           }),
         );
       } catch (error) {
