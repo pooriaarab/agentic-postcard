@@ -17,7 +17,7 @@ import {
   LobPostcardAdapter,
   PostGridPostcardAdapter,
   sendVerifiedPostcard,
-  VendorError,
+  AdapterError,
 } from "../src/adapters.js";
 import type {
   PostcardAddress,
@@ -152,16 +152,45 @@ try {
     { adapter: pgAdapter, verify },
   );
 } catch (error) {
-  refused = error instanceof VendorError;
+  refused = error instanceof AdapterError;
 }
 check("undeliverable address refused", refused);
 check("refused send never reached postgrid", postgridLog.length === before);
+
+// The allow list defaults to ["deliverable"]: a "risky" verdict is
+// refused too, and only a configured wider list lets it through.
+const riskyVerify = (): Promise<RecipientCheck> =>
+  Promise.resolve({ deliverability: "risky", score: 60 });
+refused = false;
+try {
+  await sendVerifiedPostcard(
+    { to, ...art },
+    { adapter: pgAdapter, verify: riskyVerify },
+  );
+} catch (error) {
+  refused = error instanceof AdapterError;
+}
+check("risky verdict refused by default", refused);
+check("risky refusal never reached postgrid", postgridLog.length === before);
+
+const widened = await sendVerifiedPostcard(
+  { to, ...art },
+  {
+    adapter: pgAdapter,
+    verify: riskyVerify,
+    allowedDeliverability: ["deliverable", "risky"],
+  },
+);
+check(
+  "allow list widens deliberately",
+  widened.recipient.deliverability === "risky",
+);
 
 let threw = false;
 try {
   new PostGridPostcardAdapter({});
 } catch (error) {
-  threw = error instanceof VendorError;
+  threw = error instanceof AdapterError;
 }
 check("missing key is refused", threw);
 

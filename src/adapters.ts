@@ -1,5 +1,3 @@
-import { VendorError } from "agentic-core";
-import type { Guards, Logger } from "agentic-core";
 import {
   addressCountry,
   assertSendRequest,
@@ -44,7 +42,38 @@ export type {
   VendorName,
 } from "./shared.js";
 export { DryRunPostcardAdapter } from "./vendors/stub.js";
-export { VendorError } from "agentic-core";
+
+// AdapterError mirrors the agentic-core VendorError shape
+// (`code: "VENDOR_FAILED"`, optional `status`) but is defined on this
+// path so the Workers bundle never pulls the core entry (which imports
+// crypto and module) and needs no nodejs_compat flag. The Guards and
+// Logger shapes below match agentic-core's, so caller-built core
+// objects still fit.
+export class AdapterError extends Error {
+  readonly code = "VENDOR_FAILED" as const;
+  readonly status?: number;
+  constructor(
+    message: string,
+    options: { status?: number; cause?: unknown } = {},
+  ) {
+    super(message, { cause: options.cause });
+    this.name = "AdapterError";
+    this.status = options.status;
+  }
+}
+
+export interface Logger {
+  debug(message: string): void;
+  info(message: string): void;
+  warn(message: string): void;
+  error(message: string): void;
+}
+
+export interface Guards {
+  readonly dispatchCount: number;
+  checkDispatch(text: string): void;
+  recordDispatch(): void;
+}
 
 // Integer minor units from a vendor price (a decimal major-unit
 // string or number). Empty stays unknown; Twilio-style negative
@@ -127,7 +156,7 @@ export class LobPostcardAdapter implements PostcardVendorAdapter {
 
   constructor(options: LobAdapterOptions = {}) {
     if (!options.apiKey) {
-      throw new VendorError("lob needs an apiKey argument to send");
+      throw new AdapterError("lob needs an apiKey argument to send");
     }
     this.apiKey = options.apiKey;
     this.baseUrl = (options.baseUrl ?? LOB_BASE_URL).replace(/\/+$/, "");
@@ -152,19 +181,22 @@ export class LobPostcardAdapter implements PostcardVendorAdapter {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
-      throw new VendorError(`lob request failed: ${String(error)}`, {
+      throw new AdapterError(`lob request failed: ${String(error)}`, {
         cause: error,
       });
     }
     if (!response.ok) {
       const body = await response.text().catch(() => "");
-      throw new VendorError(errorText(this.name, response.status, body), {
+      throw new AdapterError(errorText(this.name, response.status, body), {
         status: response.status,
       });
     }
     return response;
   }
 
+  // Sends without verifying the recipient. Only `sendVerifiedPostcard`
+  // runs the address check; callers mailing through sendCard directly
+  // must verify first themselves.
   async sendCard(request: PostcardSend): Promise<PostcardReceipt> {
     assertSendRequest(request);
     const body: Record<string, unknown> = {
@@ -185,7 +217,7 @@ export class LobPostcardAdapter implements PostcardVendorAdapter {
     const parsed = asRecord(await response.json());
     const id = str(parsed.id);
     if (id === undefined) {
-      throw new VendorError("lob send returned no card id");
+      throw new AdapterError("lob send returned no card id");
     }
     const costCents = centsOf(parsed.cost ?? parsed.price);
     return {
@@ -264,7 +296,7 @@ const SIZE_MAP: Record<string, string> = {
 export function postgridSize(size: string): string {
   const mapped = SIZE_MAP[size];
   if (mapped === undefined) {
-    throw new VendorError(`postgrid has no size "${size}"`);
+    throw new AdapterError(`postgrid has no size "${size}"`);
   }
   return mapped;
 }
@@ -310,7 +342,7 @@ export class PostGridPostcardAdapter implements PostcardVendorAdapter {
 
   constructor(options: PostGridAdapterOptions = {}) {
     if (!options.apiKey) {
-      throw new VendorError("postgrid needs an apiKey argument to send");
+      throw new AdapterError("postgrid needs an apiKey argument to send");
     }
     this.apiKey = options.apiKey;
     this.baseUrl = (options.baseUrl ?? POSTGRID_BASE_URL).replace(/\/+$/, "");
@@ -335,19 +367,22 @@ export class PostGridPostcardAdapter implements PostcardVendorAdapter {
         signal: AbortSignal.timeout(this.timeoutMs),
       });
     } catch (error) {
-      throw new VendorError(`postgrid request failed: ${String(error)}`, {
+      throw new AdapterError(`postgrid request failed: ${String(error)}`, {
         cause: error,
       });
     }
     if (!response.ok) {
       const body = await response.text().catch(() => "");
-      throw new VendorError(errorText(this.name, response.status, body), {
+      throw new AdapterError(errorText(this.name, response.status, body), {
         status: response.status,
       });
     }
     return response;
   }
 
+  // Sends without verifying the recipient. Only `sendVerifiedPostcard`
+  // runs the address check; callers mailing through sendCard directly
+  // must verify first themselves.
   async sendCard(request: PostcardSend): Promise<PostcardReceipt> {
     assertSendRequest(request);
     const body: Record<string, unknown> = {
@@ -367,7 +402,7 @@ export class PostGridPostcardAdapter implements PostcardVendorAdapter {
     const parsed = asRecord(await response.json());
     const id = str(parsed.id);
     if (id === undefined) {
-      throw new VendorError("postgrid send returned no card id");
+      throw new AdapterError("postgrid send returned no card id");
     }
     const costCents = centsOf(parsed.price);
     return {
@@ -431,14 +466,18 @@ export class PostGridPostcardAdapter implements PostcardVendorAdapter {
   }
 }
 
-// Verified send. The recipient is checked through an injected verifier
-// (an agentic-address verify call in the CRM) before the vendor sees
-// the card. An undeliverable verdict or a thrown check refuses the
-// send and spends nothing.
+// Verified send. This is the only call on this path that verifies the
+// recipient: the injected verifier (an agentic-address verify call in
+// the CRM) runs before the vendor sees the card, and any verdict not
+// on the allow list refuses the send and spends nothing. The allow
+// list defaults to ["deliverable"] — a "risky" or "unknown" verdict
+// refuses too; pass allowedDeliverability to widen it. Bare sendCard
+// on the vendor adapters verifies nothing.
 
 export interface VerifiedSendOptions {
   adapter: PostcardVendorAdapter;
   verify: RecipientVerifier;
+  allowedDeliverability?: RecipientCheck["deliverability"][];
   guards?: Guards;
   logger?: Logger;
 }
@@ -473,9 +512,10 @@ export async function sendVerifiedPostcard(
   assertSendRequest(request);
   options.guards?.checkDispatch(`${request.front}\n${request.back}`);
   const recipient = await options.verify(request.to);
-  if (recipient.deliverability === "undeliverable") {
-    throw new VendorError(
-      `recipient address is undeliverable (score ${recipient.score})`,
+  const allowed = options.allowedDeliverability ?? ["deliverable"];
+  if (!allowed.includes(recipient.deliverability)) {
+    throw new AdapterError(
+      `recipient address verdict "${recipient.deliverability}" (score ${recipient.score}) is not sendable; allowed: ${allowed.join(", ")}`,
     );
   }
   const receipt = await options.adapter.sendCard(request);

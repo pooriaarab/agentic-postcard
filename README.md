@@ -111,7 +111,7 @@ The source Worker exposes `GET /health` and `POST /summarize`; it does not send 
 
 ### Edge runtimes (Cloudflare Workers)
 
-`agentic-postcard/adapters` is a fetch-only entry point for hosts with no filesystem and no `process.env`. Every credential arrives as an argument; nothing is read from the environment. `sendVerifiedPostcard` checks the recipient through an injected verifier (an agentic-address verify call in the CRM) and refuses an undeliverable address before the vendor sees the card.
+`agentic-postcard/adapters` is a fetch-only entry point for hosts with no filesystem and no `process.env`. Every credential arrives as an argument; nothing is read from the environment. `sendVerifiedPostcard` is the only call on this path that verifies the recipient — it runs an injected verifier (an agentic-address verify call in the CRM) before the vendor sees the card and refuses any verdict not on the allow list, which defaults to `["deliverable"]` (pass `allowedDeliverability` to widen it). `sendCard` on `LobPostcardAdapter` and `PostGridPostcardAdapter` verifies nothing on its own.
 
 ```js
 import { PostGridPostcardAdapter, sendVerifiedPostcard, addressInputOf } from 'agentic-postcard/adapters';
@@ -129,7 +129,7 @@ const sent = await sendVerifiedPostcard(
 // `expected_delivery_date`) when the vendor reports them.
 ```
 
-The transitive `agentic-core` import needs the `nodejs_compat` compatibility flag (OpenNext workers already set it). See `e2e/worker.ts` and `e2e/e2e.ts` for a bundled proof and a dry-run E2E against local fakes.
+The `/adapters` entry imports nothing from `agentic-core` or `agentic-address`, so the bundle needs no `nodejs_compat` flag at all; failures throw the local `AdapterError` (`code: "VENDOR_FAILED"`). See `e2e/worker.ts` and `e2e/e2e.ts` for a bundled proof and a dry-run E2E against local fakes.
 
 ## Delivery and behavior limits
 
