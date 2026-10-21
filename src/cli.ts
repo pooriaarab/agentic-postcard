@@ -11,6 +11,7 @@ import {
   type VerifyVendor,
 } from "./postcard.js";
 import { getCostReport, GuardError, VendorError } from "./core.js";
+import { AdapterError } from "./adapters.js";
 import { DEFAULT_BRAND } from "./index.js";
 import { VERSION } from "./version.js";
 
@@ -306,6 +307,7 @@ export async function runCli(argv: string[], io: CliIo = defaultIo()): Promise<n
     if (
       error instanceof GuardError ||
       error instanceof VendorError ||
+      error instanceof AdapterError ||
       error instanceof UsageError
     ) {
       io.err(`${error.name}: ${error.message}`);

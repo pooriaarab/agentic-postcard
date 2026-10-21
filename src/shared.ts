@@ -121,7 +121,8 @@ export interface CancelResult {
 }
 
 // Vendor adapters. Each one sends, tracks, and cancels through
-// its vendor API. All failures throw VendorError.
+// its vendor API. All failures throw the path's vendor error
+// (AdapterError on /adapters, VendorError on the Node path).
 
 export interface PostcardVendorAdapter {
   readonly name: string;
