@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { VendorError } from "./core.js";
+import { AdapterError } from "./adapters.js";
 import { LobPostcardAdapter } from "./vendors/lob.js";
 import { postgridSize, PostGridPostcardAdapter } from "./vendors/postgrid.js";
 import { DryRunPostcardAdapter } from "./vendors/stub.js";
@@ -81,18 +81,18 @@ describe("lob adapter", () => {
     expect(receipt.trackingUrl).toBe("https://api.lob.com/v1/postcards/psc_no_url");
   });
 
-  test("a 422 throws VendorError with status", async () => {
+  test("a 422 throws AdapterError with status", async () => {
     const fetchFn = mockFetch(
       () => new Response(JSON.stringify({ error: "bad address" }), { status: 422 }),
     );
     const adapter = new LobPostcardAdapter({ apiKey: "key-1", fetchFn });
     const error = await adapter.sendCard(SEND).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(VendorError);
-    expect((error as VendorError).status).toBe(422);
+    expect(error).toBeInstanceOf(AdapterError);
+    expect((error as AdapterError).status).toBe(422);
     expect((error as Error).message).toContain("bad address");
   });
 
-  test("a network failure throws VendorError", async () => {
+  test("a network failure throws AdapterError", async () => {
     const fetchFn = (async () => {
       throw new Error("socket hangup");
     }) as unknown as typeof fetch;
@@ -101,7 +101,7 @@ describe("lob adapter", () => {
   });
 
   test("missing key throws at construction", () => {
-    expect(() => new LobPostcardAdapter({ apiKey: "" })).toThrow(VendorError);
+    expect(() => new LobPostcardAdapter({ apiKey: "" })).toThrow(AdapterError);
   });
 
   test("track maps the last event to status", async () => {
@@ -140,7 +140,7 @@ describe("postgrid adapter", () => {
   test("sizes map to postgrid names", () => {
     expect(postgridSize("4x6")).toBe("6x4");
     expect(postgridSize("6x9")).toBe("9x6");
-    expect(() => postgridSize("5x7")).toThrow(VendorError);
+    expect(() => postgridSize("5x7")).toThrow(AdapterError);
   });
 
   test("posts the documented shape with x-api-key", async () => {
@@ -174,15 +174,15 @@ describe("postgrid adapter", () => {
     });
   });
 
-  test("a 401 throws VendorError with status", async () => {
+  test("a 401 throws AdapterError with status", async () => {
     const fetchFn = mockFetch(() => new Response("bad key", { status: 401 }));
     const adapter = new PostGridPostcardAdapter({ apiKey: "nope", fetchFn });
     const error = await adapter.sendCard(SEND).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(VendorError);
-    expect((error as VendorError).status).toBe(401);
+    expect(error).toBeInstanceOf(AdapterError);
+    expect((error as AdapterError).status).toBe(401);
   });
 
-  test("a network failure throws VendorError", async () => {
+  test("a network failure throws AdapterError", async () => {
     const fetchFn = (async () => {
       throw new Error("dns fail");
     }) as unknown as typeof fetch;
