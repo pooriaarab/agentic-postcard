@@ -70,6 +70,9 @@ export {
 } from "./vendors/postgrid.js";
 export type { PostGridAdapterOptions } from "./vendors/postgrid.js";
 export { DryRunPostcardAdapter } from "./vendors/stub.js";
+// The vendor adapters throw AdapterError (the /adapters entry defines
+// it locally); the Node path re-exports it so SDK callers can catch it.
+export { AdapterError } from "./adapters.js";
 
 import { defineBrand, type BrandConfig } from "./core.js";
 import { VERSION } from "./version.js";
