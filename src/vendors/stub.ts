@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import {
   assertSendRequest,
   type CancelResult,
@@ -6,7 +5,7 @@ import {
   type PostcardSend,
   type PostcardVendorAdapter,
   type TrackingInfo,
-} from "../postcard.js";
+} from "../shared.js";
 
 // Dry-run stub. Validates like a real vendor but moves no card
 // and opens no network connection. The default when no vendor
@@ -17,7 +16,7 @@ export class DryRunPostcardAdapter implements PostcardVendorAdapter {
 
   async sendCard(request: PostcardSend): Promise<PostcardReceipt> {
     assertSendRequest(request);
-    const id = `dry_${randomUUID()}`;
+    const id = `dry_${crypto.randomUUID()}`;
     return {
       adapter: this.name,
       id,
